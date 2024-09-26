@@ -1,14 +1,14 @@
 package models
 
 type TicketResponse struct {
-	ID     int    `json:"id"`
+	UserID int    `json:"id"`
 	Title  string `json:"title"`
 	Body   string `json:"body"`
-	Status string `json:"status"` // под вопросом данное поле
 }
 
 type TicketRequest struct {
-	ID          int    `json:"id"`
+	TicketID    string `json:"id"`
+	UserID      int    `json:"user_id"`
 	Departament string `json:"departament"`
 	Title       string `json:"title"`
 	Body        string `json:"body"`

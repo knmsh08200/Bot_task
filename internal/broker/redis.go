@@ -2,7 +2,7 @@ package broker
 
 import (
 	"context"
-	"strconv"
+	"encoding/json"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/knmsh08200/Bot_task/internal/models"
@@ -16,24 +16,34 @@ func NewRepRedis(r *redis.Client) *ticketRedis {
 	return &ticketRedis{rdb: r}
 }
 
-func (t *ticketRedis) CreateTicket(ctx context.Context, request models.TicketRequest) (models.TicketResponse, error) {
+func (t *ticketRedis) CreateTicket(ctx context.Context, request *models.TicketRequest) (string, error) {
 
-	ticketResp := models.TicketResponse{
-		ID:     request.ID,
-		Title:  request.Title,
-		Body:   request.Body,
-		Status: "новый",
+	ticketJSON, err := json.Marshal(request)
+	if err != nil {
+		return "", err
 	}
 
-	// Кэшируем тикет в Redis
-	err := t.rdb.Set(ctx, strconv.Itoa(request.ID), ticketResp, 0).Err() // set expiratiom time
+	// Кэшируем тикет в Redis, используя TicketID в качестве ключа
+	err = t.rdb.Set(ctx, request.TicketID, ticketJSON, 0).Err()
+	if err != nil {
+		return "", err
+	}
+
+	return request.TicketID, nil
+
+}
+
+func (t *ticketRedis) GetTicket(ctx context.Context, ticketID string) (models.TicketResponse, error) {
+	var ticketResp models.TicketResponse
+
+	// Извлекаем тикет из Redis
+	ticketJSON, err := t.rdb.Get(ctx, ticketID).Result()
 	if err != nil {
 		return ticketResp, err
 	}
 
-	// Добавляем тикет в список для уведомления администраторов
-	adminListKey := request.Title + "_admin_notifications"
-	err = t.rdb.RPush(ctx, adminListKey, request.ID).Err()
+	// Декодируем JSON в структуру
+	err = json.Unmarshal([]byte(ticketJSON), &ticketResp)
 	if err != nil {
 		return ticketResp, err
 	}

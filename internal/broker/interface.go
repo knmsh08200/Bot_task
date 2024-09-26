@@ -7,10 +7,6 @@ import (
 )
 
 type TicketService interface {
-	CreateTicket(ctx context.Context, request models.TicketRequest) (models.TicketResponse, error)
+	GetTicket(ctx context.Context, ticketID string) (models.TicketResponse, error)
+	CreateTicket(ctx context.Context, request *models.TicketRequest) (string, error) // тут можно интерфейс использовать или попробовать разнести интерфейсы постгрес и редис
 }
-
-// type TicketServiceDB interface {
-// 	CreateTicket(ctx context.Context, request models.TicketRequest) (int, error)
-// 	GetTicket(ctx context.Context, ticketID int) (models.TicketResponse, error)
-// }

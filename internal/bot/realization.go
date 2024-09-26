@@ -1,44 +1,59 @@
 package bot
 
-import(
-	"github.com/go-redis/redis/v8"
+import (
+	"context"
+	"encoding/json"
+	"log"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-    "github.com/knmsh08200/Bot_task/internal/broker"
+	"github.com/knmsh08200/Bot_task/internal/admin"
+	"github.com/knmsh08200/Bot_task/internal/broker"
+	"github.com/knmsh08200/Bot_task/internal/models"
 )
 
 type BotService struct {
-    Service broker.TicketService
+	Service broker.TicketService
 }
 
-type TelegramAPI struct {
-    Bot *tgbotapi.BotAPI
+func NewRep(b broker.TicketService) BotService {
+	return BotService{Service: b}
 }
 
-func NotifyAdmins(ctx context.Context, bot *tgbotapi.BotAPI, redisClient *redis.Client) {
-    for {
-        // Периодически проверяем наличие новых тикетов для уведомления
-        time.Sleep(5 * time.Second) // Интервал проверки
+func (b *BotService) NotifyAdmins(ctx context.Context, ticketID string, bot *tgbotapi.BotAPI) {
+	for {
+		// Извлекаем тикеты для каждого отдела
+		departments := []string{"Support", "IT", "Billing"}
+		for _, department := range departments {
 
-        // Извлекаем тикеты для каждого отдела
-        departments := []string{"Support", "IT", "Billing"}
-        for _, department := range departments {
-            adminListKey := department + "_admin_notifications"
+			ticketResponce, err := b.Service.GetTicket(ctx, ticketID)
+			if err != nil {
+				log.Printf("Bad with redis")
+			}
+			adminID, exists := admin.AdminIDs[department]
+			if !exists {
+				log.Printf("Не найден админ для департамента: %s", department)
+				continue
+			}
 
-            // Извлекаем тикет
-            ticketID, err := redisClient.LPop(ctx, adminListKey).Result()
-            if err == redis.Nil { // trash
-                continue // Нет новых тикетов
-            } else if err != nil {
-                continue // Обрабатываем ошибку
-            }
+			ticketMessage, err := json.Marshal(ticketResponce)
+			if err != nil {
+				log.Printf("Ошибка при сериализации тикета: %v", err)
+				continue
+			}
 
-            // Отправляем уведомление админу
-            message := tgbotapi.NewMessage(/*здесь ID админа */, "Новый тикет:\nID: "+ticketID)
-            _, err = bot.Send(message)
-            if err != nil {
-                log.Printf("Тикет не доставлен администратору") // Обрабатываем ошибку отправки
-            }
-			
-        }
-    }
+			// Отправляем уведомление админу
+			message := tgbotapi.NewMessage(int64(adminID), "Новый тикет:\nID:"+string(ticketMessage))
+			_, err = bot.Send(message)
+			if err != nil {
+				log.Printf("Уведомление не отправлено")
+			} else {
+				log.Printf("Уведомление отправлено администратору %d о новом тикете: %d", adminID, ticketResponce.UserID)
+			}
+
+		}
+	}
+}
+
+func (t *BotService) CreateTicket(ctx context.Context, request *models.TicketRequest) (string, error) { // тут можно интерфейс использовать или попробовать разнести интерфейсы постгрес и редис
+	return t.Service.CreateTicket(ctx, request)
 }
